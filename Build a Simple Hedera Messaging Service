@@ -1,0 +1,83 @@
+from hedera import (
+    Client,
+    AccountId,
+    PrivateKey,
+    TopicCreateTransaction,
+    TopicMessageSubmitTransaction,
+    TopicMessageQuery,
+    Timestamp,
+    TransactionReceipt,
+    Hbar
+)
+from datetime import datetime
+
+# Configure your Hedera Client
+client = Client.for_testnet()
+client.set_operator(AccountId.fromString("0.0.123456"), PrivateKey.fromString("302e020100300506032b657004220420xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"))
+
+# Function to create a new topic (for messaging)
+def create_topic() -> str:
+    # Create a new topic
+    response = TopicCreateTransaction() \
+        .execute(client)
+    
+    receipt = response.get_receipt(client)
+    topic_id = receipt.topic_id
+    print(f"Topic Created: {topic_id}")
+    
+    return topic_id
+
+# Function to send a message to a topic
+def send_message_to_topic(topic_id: str, message: str):
+    # Create a new message transaction to the topic
+    response = TopicMessageSubmitTransaction() \
+        .set_topic_id(topic_id) \
+        .set_message(message) \
+        .execute(client)
+    
+    receipt = response.get_receipt(client)
+    message_timestamp = receipt.consensus_timestamp
+    formatted_timestamp = format_timestamp(message_timestamp)
+    print(f'Message Sent: "{message}" at {formatted_timestamp}')
+
+# Function to retrieve messages from a topic
+def receive_messages_from_topic(topic_id: str):
+    query = TopicMessageQuery().set_topic_id(topic_id).set_start_time(Timestamp(0))
+    
+    # Collect all messages from the topic
+    message_list = []
+    for message in query.execute(client):
+        message_text = message.message.decode()
+        timestamp = message.consensus_timestamp
+        formatted_timestamp = format_timestamp(timestamp)
+        message_list.append((message_text, formatted_timestamp))
+    
+    return message_list
+
+# Helper function to format consensus timestamp
+def format_timestamp(consensus_timestamp):
+    # Hedera timestamps are in nanoseconds, so we convert them to a readable format
+    timestamp = datetime.utcfromtimestamp(consensus_timestamp.seconds + consensus_timestamp.nanos / 1e9)
+    return timestamp.strftime('%Y-%m-%d %H:%M:%S')
+
+# Example usage
+if __name__ == "__main__":
+    # Create a new topic
+    topic_id = create_topic()
+
+    # Send messages to the topic
+    send_message_to_topic(topic_id, "Hello, Hedera!")
+    send_message_to_topic(topic_id, "Learning HCS")
+    send_message_to_topic(topic_id, "Message 3")
+
+    # Retrieve messages from the topic
+    messages = receive_messages_from_topic(topic_id)
+
+    # Print the sent messages and their timestamps
+    print("\nMessages Sent:")
+    for i, (message, timestamp) in enumerate(messages):
+        print(f"{i + 1}. \"{message}\" at {timestamp}")
+    
+    print("\nMessages Received:")
+    for i, (message, timestamp) in enumerate(messages):
+        print(f"{i + 1}. \"{message}\" at {timestamp}")
